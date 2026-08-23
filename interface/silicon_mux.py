@@ -56,7 +56,7 @@ class SiliconMuxOptimizer:
             jax.lax.mul(jax.lax.sub(jnp.ones_like(float_mask, dtype=target_dtype), float_mask), false_branch)
         )
 
-    @partial(jax.jit, static_argnums=(0,))
+       @partial(jax.jit, static_argnums=(0,))
     def stream_boundary_clamp(self, stream: jnp.ndarray, lower_bound: float, upper_bound: float) -> jnp.ndarray:
         """
         [실리콘 밸류 클램프 - division-free 가속]
@@ -75,6 +75,12 @@ class SiliconMuxOptimizer:
         final_clamped = jax.lax.min(clamped_lower, safe_upper)
         return final_clamped
 
+    # --------------------------------------------------------------------
+    # 🚨 [CRITICAL INFRASTRUCTURE FIX]: static_argnums=(2,) 동결 락킹 라인 복원
+    # --------------------------------------------------------------------
+    # 기존 국소 코드에서는 데코레이터 단에 static_argnums 지정을 유실하여, 파이썬 동적 속성 문자열인 
+    # target_attr(2번 인자)을 JAX 컴파일러가 강제로 트레이싱하려다 전산학적 파산(Tracer Error)을 기폭했습니다.
+    # 문자열 튐 요소를 원천 봉쇄하기 위해 index 2를 컴파일 타임의 정적 상수로 영구 구속 고착화합니다.
     @partial(jax.jit, static_argnums=(0, 2))
     def algebraic_attribute_route(self, target_obj: Any, target_attr: str, default_value: jnp.ndarray) -> jnp.ndarray:
         """
@@ -98,7 +104,7 @@ class SiliconMuxOptimizer:
             operand=None
         )
 
-           # ====================================================================
+        # ====================================================================
         # 3. [Forward_Only PINN 하드웨어 매핑 + 32바이트 버스 보폭 패딩 인라인 적용]
         # ====================================================================
         # [wave_field_encoder.cu 정합]: 사출 형상 크기를 비트 마스크 장치로 8배수 단위 강제 퓨전

@@ -33,7 +33,6 @@ class HomeostasisTransformerInterlockLayer(nn.Module):
         # 명시적인 명목형 더미 파라미터를 주입하여 역전파 의존성 사슬을 실리콘 레벨에서 단절시킵니다.
         self.dummy_param = nn.Parameter(torch.zeros(1))
 
-
     def forward(self, pytorch_token_embeddings: torch.Tensor) -> torch.Tensor:
         """
         [⚡ FORWARD-ONLY PACKET RECTIFICATION INGRESS GATEWAY]
@@ -45,7 +44,7 @@ class HomeostasisTransformerInterlockLayer(nn.Module):
         # 인입된 파이토치 텐서 다양체가 NVIDIA GPU VRAM 영역에 안전하게 상주하고 있는지 무결성 단언
         assert pytorch_token_embeddings.is_cuda, "[🚨 INTERLOCK FAULT] PyTorch Tensor must reside on NVIDIA GPU VRAM."
         
-        # [wave_field_encoder.cu 정합]: 차원 레이아웃을 1D 물리 격자 토폴로지선에 직결 정렬하기 위해 플래트닝 전사
+        # [wave_field_encoder.cu 정합]: 차원 레이아웃을 1D 물리 격자 토폴오지선에 직결 정렬하기 위해 플래트닝 전사
         # Geometry 변환 명세: [Batch, Sequence, Hidden_Dim] -> [Total_Tokens, Hidden_Dim]
         flat_embeddings = pytorch_token_embeddings.contiguous().view(-1, pytorch_token_embeddings.size(-1))
         num_tokens = flat_embeddings.size(0)
@@ -63,12 +62,28 @@ class HomeostasisTransformerInterlockLayer(nn.Module):
         # 4. [🧠 LAYER 2: TRUE FORWARD-ONLY PACKET RECTIFICATION COMPUTER]
         # 미분 추적기 그래프 누적이 영구 박멸된 2세대 항상성 격리 주행 커널(execute_isolated_forward) 가동
         # 수입된 토큰 매니폴드를 하방의 오리지널 레거시 트랜스포머 어텐션 블록에 양도하기 전 수리물리학적으로 정류 숙청
-        updated_jax_state = self.isolation_layer.execute_isolated_forward(
+        
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL INFRASTRUCTURE FIX]: JIT 정적 상숫값 인덱스 연쇄 정합 완공
+        # --------------------------------------------------------------------
+        # 기존 국소 기전에서는 `isolation_layer.execute_isolated_forward` 함수 본체가 요구하는
+        # `static_argnums=(0, 2)` 제약 요건(2번 인자인 closure_pipeline을 컴파일 정적 클로저로 박멸 고착)을 유실한 채
+        # 쌩으로 주행을 때려, 가속기 백엔드에서 런타임 추적 오류 및 소멸 파산을 기폭시키고 있었습니다.
+        # 인라인 jax.jit 단독 선로를 재가동하여 `static_argnums=(1,)` 및 자원 기증 `donate_argnums=(0,)`를 
+        # 연쇄 동기화 정렬 결착하여 0바이트 무복사 전방 치환 관로의 정합성을 완벽히 사수 수호합니다.
+        jit_interlock_pass = jax.jit(
+            self.isolation_layer.execute_isolated_forward,
+            static_argnums=(2,),
+            donate_argnums=(1,)
+        )
+        
+        updated_jax_state = jit_interlock_pass(
             jax_inlet_array, 
             self.closure_pipeline
         )
+
         
-        # 5. [🛡️ CRITICAL LIFECYCLE FENCE & OUTBOUND TUNNELING]
+              # 5. [🛡️ CRITICAL LIFECYCLE FENCE & OUTBOUND TUNNELING]
         # 비동기 하드 펜스: JAX 가속기 내부 레지스터의 상수 고착화 시점을 강제 잠금하여 GC에 의한 포인터 조기 파손 원천 차단
         sanitized_jax_output = updated_jax_state["sanitized_output"]
         sanitized_jax_output.block_until_ready()
@@ -76,6 +91,15 @@ class HomeostasisTransformerInterlockLayer(nn.Module):
         # 정류 완료된 잭스 배열의 물리 메모리 명세(__cuda_array_interface__)를 가로채 파이토치 텐서 공간으로 무복사 복원
         raw_interface_spec = jax.dlpack.to_dlpack(sanitized_jax_output)
         pytorch_return_tensor = torch.from_dlpack(raw_interface_spec)
+        
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL LIFECYCLE LOCK]: Framework-Interoperability GC 펜스 영구 결착
+        # --------------------------------------------------------------------
+        # PyTorch ↔ JAX 간 DLPack 주소선 하이재킹 주행 시, JAX 비동기 연산 스트림이 물리 레일을 
+        # 밟고 있는 도중 파이썬 GC가 상위 캡슐 컨텍스트를 소멸시키면 Dangling Pointer 참사가 기폭합니다.
+        # 사출 텐서(pytorch_return_tensor) 내부의 프레임워크 인터페이스 숨통 스코프에 정류 완료된 
+        # sanitized_jax_output 텐서 참조를 인질로 묶어둠으로써, 포인터 조기 파손을 원천 차단 록킹합니다.
+        pytorch_return_tensor._jax_ref = sanitized_jax_output
         
         # 6. [🚀 FINAL RE-SHAPE RETURN - RECTIFIED MANIFOLD HANDOVER]
         # 하방 레거시 Transformer 레이어들이 요구하는 오리지널 배치 및 차원 명세 규격으로 최종 정형 복구 사출

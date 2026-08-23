@@ -1,5 +1,3 @@
-# 작업중
-
 # ⏳ Homeostasis Kernel: 2nd-Generation Causal AI Engine (PoC)
 
 "본 연구 중심의 개념 증명(PoC) 프로젝트는 역전파(Backpropagation)의 사후적 수렴 방식이 유발할 수 있는 수치적 시차 지터와 거시적 인과율 누수 현상을 보완하기 위해, '선형적 시간 연속성'을 순방향으로 강제 집행하는 하드웨어 친화적 항상성 커널의 수리적 가능성을 탐색합니다."

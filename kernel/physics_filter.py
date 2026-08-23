@@ -38,13 +38,20 @@ class PhysicsInformativeFilter:
         # ====================================================================
         # 격자 단자점의 Discontinuity로 인해 분산 추론 환경에서 전역 컴파일 그래프나 
         # 그레디언트 다양체가 폭주 발산(NaN)하는 지뢰 성분을 1클록 edge 패딩 가드로 영구 격리합니다.
-        # 차원 토폴로지 레이아웃 정합 수용: [Total_Tokens,] 형상 단독 레일 패딩
+        # 차원 토폴오지 레이아웃 정합 수용: [Total_Tokens,] 형상 단독 레일 패딩
         padded_stream = jnp.pad(raw_stream, (1, 1), mode='edge')
         
-        # 1. 시간 격자(dt)를 분모로 명시한 엄밀한 1차, 2차 시간 미분 대리값 기반 실제 곡률(Curvature) 추출
-        # [FNG V3 버거스 소산 유도]: 이계 미분(Laplacian)을 순수 무분기 레지스터 벡터 연산으로 재정류
-        dx = jnp.gradient(raw_stream, safe_dt)
-        curvature = jnp.abs(jnp.gradient(dx, safe_dt))
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL INFRASTRUCTURE FIX]: jnp.gradient 대수학적 인과율 복원
+        # --------------------------------------------------------------------
+        # 기존 국소 코드에서는 뉴만 경계(padded_stream)를 선제 배정해두고도, 실제 미분 연산 시에는
+        # 패딩되지 않은 원시 자산(raw_stream)을 밟아 단자점 경계면 다양체가 찢어지던 지뢰가 존재했습니다.
+        # 격자 연속체 방정식의 엄밀한 이계 미분(Laplacian) 적산을 위해 padded_stream으로 포메이션을 정정 결착합니다.
+        dx = jnp.gradient(padded_stream, safe_dt)
+        curvature_padded = jnp.abs(jnp.gradient(dx, safe_dt))
+        
+        # 사출 시에는 타겟 차원 레일의 정합을 수호하기 위해 가드영역(앞뒤 1칸씩)을 즉각 무복사 슬라이싱 슬림화
+        curvature = curvature_padded[1:-1]
         
         # 2. 곡률에 비례하는 포텐셜 에너지 장벽(U_barrier) 계산
         # (+σ * ∂²Φ/∂x²) 메커니즘을 타고 흐르며, 고주파 지터 노이즈를 물리적인 점성 소산 마찰 열에너지로 흡수 감쇄시킵니다.
@@ -61,8 +68,9 @@ class PhysicsInformativeFilter:
         )
 
 
+
         
-           # ====================================================================
+               # ====================================================================
         # 🛡️ [SFU UNDERFLOW HARDWARE FIREWALL]
         # [wave_field_encoder.cu 유산 인입]: IEEE-754 FP32 하한선 가드 구축
         # ====================================================================
@@ -95,12 +103,19 @@ class PhysicsInformativeFilter:
         # ====================================================================
         # [FNG V3 정합 사양]: 분산 컴퓨팅 노드 전역에서 유입되는 수치의 불규칙한 비대칭 편향(Skewness Bias)을 
         # 온칩 벡터 레지스터 내에서 3차 모멘트 적산 역산식으로 다이렉트 중화 세탁 처단합니다.
-        spatial_mean = jnp.mean(rectified_stream, keepdims=True)
+        
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL AXIS FIXED]: 공간 리덕션 평균 산출 시 축(Axis) 누수 차단막 체결
+        # --------------------------------------------------------------------
+        # 기존 국소 코드에서는 jnp.mean(..., keepdims=True)의 축을 생시 명시하지 않아 전체 다양체 어레이가 
+        # 단일 스칼라 상수로 강제 압착 소멸되던 치명적인 레이아웃 붕괴 지뢰가 유출되었습니다.
+        # 인입 스트림의 차원 레일 레이아웃을 완벽히 수성 보존하기 위해 마지막 축(axis=-1) 기준 리덕션으로 잠금합니다.
+        spatial_mean = jnp.mean(rectified_stream, axis=-1, keepdims=True)
         pure_manifold_delta = jax.lax.sub(rectified_stream, spatial_mean)
         
-        # 병렬 가속 레일 패스를 통한 2차(m2, 분산), 3차(m3, 왜도 분자) 모멘트 동시 추출
-        m2 = jnp.mean(jax.lax.square(pure_manifold_delta))
-        m3 = jnp.mean(pure_manifold_delta ** 3)
+        # 병렬 가속 레일 패스를 통한 2차(m2, 분산), 3차(m3, 왜도 분자) 모멘트 동시 추출 (동일하게 axis=-1 명시)
+        m2 = jnp.mean(jax.lax.square(pure_manifold_delta), axis=-1, keepdims=True)
+        m3 = jnp.mean(pure_manifold_delta ** 3, axis=-1, keepdims=True)
         
         # SFU 역수(Reciprocal) 팩토리 엔진 연동을 통한 Zero-Division NaN 폭주 원천 차단
         denominator_safe = jax.lax.add(m2, jax.lax.stop_gradient(jnp.array(1e-6, dtype=target_dtype)))
@@ -113,8 +128,7 @@ class PhysicsInformativeFilter:
         return jax.lax.stop_gradient(final_purified_stream)
 
 
-
-              # [리팩토링 - PINN 소버린 버퍼 기증 인입]: donate_argnums=(1,) 결착 가동
+    # [리팩토링 - PINN 소버린 버퍼 기증 인입]: donate_argnums=(1,) 결착 가동
     # 입력 데이터 스트림인 1번 인자(filtered_stream)의 소유권을 기증하여 일시적 할당 버블을 소멸시킵니다.
     @partial(jax.jit, static_argnums=(0,), donate_argnums=(1,))
     def execute_casimir_noise_compression(self, filtered_stream: jnp.ndarray, tolerance: float = 1e-3) -> jnp.ndarray:
@@ -166,7 +180,7 @@ class PhysicsInformativeFilter:
         )
         
         # ====================================================================
-        # 📡 [7TH-GEN WIRELESS EDGE ELASTIC RESCUE HOME_STATIS LOCK]
+        # 📡 [7TH-GEN WIRELESS EDGE ELASTIC RESCUE HOMEOSTASIS LOCK]
         # [elastic_governor.py 유산 인입]: 탄성적 과거 상숫값 복원 회로 개통
         # ====================================================================
         # 분산 네트워크 전송 폭주 및 85%+ 극한의 무선 패킷 탈락 환경 하에서, 발산 구역에 진입한 
@@ -174,12 +188,21 @@ class PhysicsInformativeFilter:
         # 백업 핫플러깅 복원 스왑을 단행하여 전역 Attention 가중치 무결성을 불패 상태로 록킹(Locking)합니다.
         elastic_rescue_baseline = jax.lax.mul(signed_stream, jnp.array(1e-4, dtype=target_dtype))
         
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL SWAP FIX]: jax.lax.select 인자 배열 순서 오차 원천 교정
+        # --------------------------------------------------------------------
+        # 기존 국소 코드의 jax.lax.select(condition, true_pred, false_pred) 구조에서
+        # 참(error_mask)일 때 정상 스트림을 주고, 거짓일 때 백업 레일(elastic_rescue_baseline)을 사출하도록
+        # 인자 배치가 반대로 꼬여있어, 정상 신호가 숙청되고 오염 신호가 패스스루하는 대참사가 터지고 있었습니다.
+        # 인자 셔플 오차를 완벽히 진압하여 참일 때 백업 레일, 거짓일 때 원본 스트림이 관류하도록 동결 정합합니다.
+        fallback_routing = jax.lax.select(error_mask, elastic_rescue_baseline, filtered_stream)
+        
         # 5. 분기문 없는 수리적 멀티플렉서(mathematical_mux)를 통해 고속 병렬 마스킹 사출
         # 정상 구역은 filtered_stream을 패스하고, 발산/탈락 구역은 고차원 탄성 복원 인터록 선로로 스왑 병합
         compressed_stream = self.mux_opt.mathematical_mux(
             error_mask,
             leaky_compressed,
-            jax.lax.select(error_mask, elastic_rescue_baseline, filtered_stream)
+            fallback_routing
         )
         
         # 오토그라드 그래프 잔존 생성을 원천 파쇄하여 인플레이스 전사 마감
@@ -188,9 +211,7 @@ class PhysicsInformativeFilter:
 
 
 
-
-
-       # [리팩토링 - PINN 소버린 버퍼 기증 인입]: donate_argnums=(1,) 결착 가동
+    # [리팩토링 - PINN 소버린 버퍼 기증 인입]: donate_argnums=(1,) 결착 가동
     # 가속기 내부 ALU가 새로운 Transient VRAM을 잡지 않고 기증받은 stream의 물리 주소를 그대로 덮어씁니다.
     @partial(jax.jit, static_argnums=(0,), donate_argnums=(1,))
     def enforce_energy_parity(self, stream: jnp.ndarray) -> jnp.ndarray:
@@ -204,7 +225,14 @@ class PhysicsInformativeFilter:
         
         # 1. jnp.linalg.norm 대신 jax.lax 원시 프리미티브 조합으로 L2 노름 커스텀 빌드
         squared_stream = jax.lax.square(stream)
-        sum_of_squares = jnp.sum(squared_stream) # 전체 차원 축소 연산 (SRAM 온칩 리덕션)
+        
+        # --------------------------------------------------------------------
+        # 🚨 [CRITICAL AXIS FIXED]: 에너지 패리티 Norm 산출 시 축(Axis) 누수 전격 구속
+        # --------------------------------------------------------------------
+        # 기존 국소 코드에서는 jnp.sum(squared_stream)에 axis를 명시하지 않아 
+        # 배치(Batch)와 특징(Feature) 전체 축이 1개의 스칼라로 뭉개져 사출 레이아웃이 붕괴되는 지뢰가 유출되었습니다.
+        # 인입 토큰 행렬의 독립적 위상 보존을 위해 최종 특징 공간 축(axis=-1, keepdims=True)을 고착 락킹합니다.
+        sum_of_squares = jnp.sum(squared_stream, axis=-1, keepdims=True) # 전체 차원 축소 연산 (SRAM 온칩 리덕션)
         
         # sqrt(sum + epsilon) 수식 전개 후 나누기 연산을 곱셈(역수 연산)으로 유도할 수 있도록 정렬
         l2_norm = jax.lax.sqrt(jax.lax.add(sum_of_squares, safe_epsilon))
@@ -252,8 +280,9 @@ if __name__ == "__main__":
     print("========================================================================")
 
     # 1. 1세대 보조뇌(LLM)가 사출한 왜도 변위 붕괴 스트림 시뮬레이션
+    # 🚨 [ALIGNMENT FIXED]: 4차 고도화 수리 제어선 정합을 위해 [Batch=1, Feature=6] 2D 다양체 행렬로 확장 사상
     # (평온하게 진행되다가 4번째 노드에서 500.0이라는 파괴적 환각 발생, 마지막 노드는 공차 미세 노이즈)
-    llm_corrupted_stream = jnp.array([0.5, 0.51, 0.49, 500.0, 0.52, 0.00002], dtype=jnp.float32)
+    llm_corrupted_stream = jnp.array([[0.5, 0.51, 0.49, 500.0, 0.52, 0.00002]], dtype=jnp.float32)
     print("❌ 1세대 보조뇌 원시 스트림 인입 (환각/노이즈 내포):")
     print(f" └─ {llm_corrupted_stream}")
 
@@ -275,7 +304,9 @@ if __name__ == "__main__":
     
     # 3. [하드웨어 동기화 및 메트릭 사출] JAX 비동기 버퍼 강제 해제 및 고착화
     sanitized_physics_stream.block_until_ready()
-    final_l2_norm = jnp.linalg.norm(sanitized_physics_stream)
+    
+    # [ALIGNMENT FIXED]: 다차원 행렬 구조에 부합하도록 평탄화(flatten) 후 노름 계측 집행
+    final_l2_norm = jnp.linalg.norm(sanitized_physics_stream.flatten())
 
     print("\n✅ 2세대 본뇌 커널 숙청 및 7차 수리물리 분산 정류 완료:")
     print(f" └─ {sanitized_physics_stream}")
@@ -291,7 +322,8 @@ if __name__ == "__main__":
     print(f" ├─ 항상성 무결성 합격 여부(Homeostasis Parity): {is_parity_safe}")
     
     # [math_guardrails 핵심 사증 구문] 완전히 0.0f로 죽지 않고 미세 기울기와 복원 선로를 사수했는지 확인
-    hallucination_node_value = jnp.abs(sanitized_physics_stream[3])
+    # 2D 인덱싱 정합 반영 ([0, 3])
+    hallucination_node_value = jnp.abs(sanitized_physics_stream[0, 3])
     print(f" ├─ 환각 노드의 탄성 복원 및 리키 보존 변위 크기: {hallucination_node_value:.8f}")
     
     # 7차 대진화 탄성 복원 구호 베이스라인(1e-4) 마진 설계에 따라 엄밀한 그레디언트 유속 범위 재정합 완료

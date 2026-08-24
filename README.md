@@ -1,6 +1,35 @@
 # ⏳ Homeostasis Kernel: 2nd-Generation Causal AI Engine (PoC)
 
-"본 연구 중심의 개념 증명(PoC) 프로젝트는 역전파(Backpropagation)의 사후적 수렴 방식이 유발할 수 있는 수치적 시차 지터와 거시적 인과율 누수 현상을 보완하기 위해, '선형적 시간 연속성'을 순방향으로 강제 집행하는 하드웨어 친화적 항상성 커널의 수리적 가능성을 탐색합니다."
+인간의 뇌가 대뇌 피질의 자유로운 추상적 사유와 확률적 인지를 시상(Thalamus) 및 뇌간의 항상성 필터(GABA 억제 기전)를 통해 실시간 정류하여 최종 행동의 안전성을 도모하듯, 본 아키텍처는 1세대 LLM의 통계적 수치 발산 위험을 2세대 항상성 커널의 샌드위칭 구조로 제어하는 방향성을 탐구합니다.
+
+```mermaid
+graph TD
+    %% [좌측: 인간의 뇌 구조 레일]
+    A1["🧠 대뇌 피질<br>(추상 언어 / 확률적 지능)"]
+    A2["⚡ 시상 / 뇌간<br>(실시간 항상성 필터<br>GABA 억제 기전)"]
+    A3["💪 최종 행동"]
+
+    A1 --> A2
+    A2 --> A3
+
+    %% [우측: 레포지토리 아키텍처 레일]
+    B1["🎲 1세대 LLM<br>(텍스트 생성 / 확률적 벡터)"]
+    B2["⏳ 2세대 항상성 커널<br>(무분기 FMA 물리 수치 정류)"]
+    B3["🎯 최종 토큰"]
+
+    B1 --> B2
+    B2 --> B3
+
+    %% [스타일 및 컬러 테마 지정]
+    classDef brain fill:#fff3e0,stroke:#e65100,stroke-width:1.5px,color:#000;
+    classDef kernel fill:#e1f5fe,stroke:#01579b,stroke-width:1.5px,color:#000;
+    
+    class A1,A2,A3 brain;
+    class B1,B2,B3 kernel;
+```
+
+
+
 
 ## 🌌 Sector 1. 연구 목적 및 문제 정의 (Introduction)
 

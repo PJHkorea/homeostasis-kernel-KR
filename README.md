@@ -1,6 +1,6 @@
 # ⏳ Module for LLM Homeostasis (PoC)
 
-이 모듈은 1세대 LLM의 확률적 발산을 제어하는 2세대 홈오스타시스 커널(2nd-Generation Homeostatic Kernel) 아키텍처를 기반으로 설계되었습니다.
+이 모듈은 1세대 LLM의 확률적 발산을 제어하는 2세대 항상성 유지 커널(2nd-Generation Homeostatic Kernel) 아키텍처를 기반으로 설계되었습니다.
 
 ---
 

@@ -206,7 +206,6 @@ $$\mathbf{X}_{\text{final}}=\frac{\mathbf{X}_{\text{flattened}}}{\|{}\mathbf{X}_
 homeostasis-kernel/
 │
 ├── README.md                 # 1세대 확률 추론의 인과율 누수 분석 및 2세대 순방향 항상성 철학 백서
-├── requirements.txt          # 분산 환경 및 이종 프레임워크 연동(JAX, PyTorch, CuPy 등) 의존성 명세
 │
 ├── kernel/                   # [Main-Brain] 2세대 항상성 가드레일 순방향 물리 필터링 엔진 (JAX)
 │   ├── __init__.py
